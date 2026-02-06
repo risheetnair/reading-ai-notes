@@ -15,9 +15,11 @@ Base.metadata.create_all(bind=engine)
 
 class NoteCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=10_000)
+    book_id: Optional[int] = None
 
 class NoteOut(BaseModel):
     id: int
+    book_id: Optional[int]
     text: str
     created_at: datetime
 
@@ -41,21 +43,30 @@ class BookOut(BaseModel):
 @app.post("/notes", response_model=NoteOut, status_code=201)
 def create_note(payload: NoteCreate):
     with SessionLocal() as db:
-        note = Note(text=payload.text)
+        if payload.book_id is not None:
+            exists = db.get(Book, payload.book_id)
+            if exists is None:
+                raise HTTPException(status_code=400, detail="book_id does not exist")
+            
+        note = Note(text=payload.text, book_id=payload.book_id)
         db.add(note)
         db.commit()
         db.refresh(note)
         return note
 
 @app.get("/notes", response_model=List[NoteOut])
-def list_notes(limit: int = 50, offset: int = 0):
+def list_notes(limit: int = 50, offset: int = 0, book_id: Optional[int] = None):
     if not (1 <= limit <= 200):
         raise HTTPException(status_code=400, detail="limit must be 1..200")
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be >= 0")
 
     with SessionLocal() as db:
-        stmt = select(Note).order_by(Note.created_at.desc()).limit(limit).offset(offset)
+        stmt = select(Note)
+        if book_id is not None:
+            stmt = stmt.where(Note.book_id == book_id)
+
+        stmt = stmt.order_by(Note.created_at.desc()).limit(limit).offset(offset)
         return list(db.scalars(stmt).all())
     
 @app.post("/books", response_model=BookOut, status_code=201)
