@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from db import Base, engine, SessionLocal
-from models import Note
+from models import Note, Book
+from typing import Optional
+
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
 Base.metadata.create_all(bind=engine)
@@ -21,6 +23,20 @@ class NoteOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class BookCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    author: Optional[str] = Field(default=None, max_length=255)
+
+class BookOut(BaseModel):
+    id: int
+    title: str
+    author: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 
 @app.post("/notes", response_model=NoteOut, status_code=201)
 def create_note(payload: NoteCreate):
@@ -40,4 +56,24 @@ def list_notes(limit: int = 50, offset: int = 0):
 
     with SessionLocal() as db:
         stmt = select(Note).order_by(Note.created_at.desc()).limit(limit).offset(offset)
+        return list(db.scalars(stmt).all())
+    
+@app.post("/books", response_model=BookOut, status_code=201)
+def create_book(payload: BookCreate):
+    with SessionLocal() as db:
+        book = Book(title=payload.title, author=payload.author)
+        db.add(book)
+        db.commit()
+        db.refresh(book)
+        return book
+
+@app.get("/books", response_model=List[BookOut])
+def list_books(limit: int = 50, offset: int = 0):
+    if not (1 <= limit <= 200):
+        raise HTTPException(status_code=400, detail="limit must be 1..200")
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+
+    with SessionLocal() as db:
+        stmt = select(Book).order_by(Book.created_at.desc()).limit(limit).offset(offset)
         return list(db.scalars(stmt).all())
