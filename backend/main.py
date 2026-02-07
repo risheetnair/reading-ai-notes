@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from db import Base, engine, SessionLocal
-from models import Note, Book
+from models import Note, Book, NoteEmbedding
 from typing import Optional
+from embedding import embed_text
 
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
@@ -52,6 +53,12 @@ def create_note(payload: NoteCreate):
         db.add(note)
         db.commit()
         db.refresh(note)
+
+        model_name, embedding_json = embed_text(note.text)
+        emb = NoteEmbedding(note_id=note.id, model_name=model_name, embedding_json=embedding_json)
+        db.add(emb)
+        db.commit()
+
         return note
 
 @app.get("/notes", response_model=List[NoteOut])
@@ -88,3 +95,12 @@ def list_books(limit: int = 50, offset: int = 0):
     with SessionLocal() as db:
         stmt = select(Book).order_by(Book.created_at.desc()).limit(limit).offset(offset)
         return list(db.scalars(stmt).all())
+
+# tests embedding retrieval
+@app.get("/notes/{note_id}/embedding")
+def get_embedding(note_id: int):
+    with SessionLocal() as db:
+        emb = db.execute(select(NoteEmbedding).where(NoteEmbedding.note_id == note_id)).scalar_one_or_none()
+        if emb is None:
+            raise HTTPException(status_code=404, detail="embedding not found")
+        return {"note_id": note_id, "model_name": emb.model_name, "embedding_len": len(__import__("json").loads(emb.embedding_json))}
