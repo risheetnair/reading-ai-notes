@@ -9,6 +9,8 @@ from db import Base, engine, SessionLocal
 from models import Note, Book, NoteEmbedding
 from typing import Optional
 from embedding import embed_text
+from search import load_vec, cosine_sim
+import numpy as np
 
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
@@ -39,6 +41,11 @@ class BookOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class NoteSearchHit(BaseModel):
+    note: NoteOut
+    score: float
+
 
 
 @app.post("/notes", response_model=NoteOut, status_code=201)
@@ -95,6 +102,44 @@ def list_books(limit: int = 50, offset: int = 0):
     with SessionLocal() as db:
         stmt = select(Book).order_by(Book.created_at.desc()).limit(limit).offset(offset)
         return list(db.scalars(stmt).all())
+    
+@app.get("/search/notes", response_model=List[NoteSearchHit])
+def search_notes(q: str, k: int = 10, book_id: Optional[int] = None):
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="q must not be empty")
+    if not (1 <= k <= 50):
+        raise HTTPException(status_code=400, detail="k must be 1..50")
+
+    model_name, q_emb_json = embed_text(q)
+    q_vec = load_vec(q_emb_json)
+
+    with SessionLocal() as db:
+        # Pull notes + embeddings for the specified model (and book, if given)
+        stmt = (
+            select(Note, NoteEmbedding)
+            .join(NoteEmbedding, NoteEmbedding.note_id == Note.id)
+            .where(NoteEmbedding.model_name == model_name)
+        )
+        if book_id is not None:
+            stmt = stmt.where(Note.book_id == book_id)
+
+        rows = db.execute(stmt).all()
+
+        scored = []
+        for note, emb in rows:
+            vec = load_vec(emb.embedding_json)
+            score = cosine_sim(q_vec, vec)
+            score = round(score, 4)
+            scored.append((score, note))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = scored[:k]
+
+        return [
+            NoteSearchHit(note=NoteOut.model_validate(note), score=score)
+            for score, note in top
+        ]
+
 
 # tests embedding retrieval
 @app.get("/notes/{note_id}/embedding")
