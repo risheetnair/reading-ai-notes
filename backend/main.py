@@ -11,6 +11,8 @@ from typing import Optional
 from embedding import embed_text
 from search import load_vec, cosine_sim
 import numpy as np
+from clusters import load_vec, kmeans_clusters, top_keywords
+
 
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
@@ -46,6 +48,15 @@ class NoteSearchHit(BaseModel):
     note: NoteOut
     score: float
 
+class ClusterNote(BaseModel):
+    note: NoteOut
+    score: float  # similarity to cluster centroid
+
+class ClusterOut(BaseModel):
+    cluster_id: int
+    size: int
+    keywords: List[str]
+    representatives: List[ClusterNote]
 
 
 @app.post("/notes", response_model=NoteOut, status_code=201)
@@ -149,3 +160,66 @@ def get_embedding(note_id: int):
         if emb is None:
             raise HTTPException(status_code=404, detail="embedding not found")
         return {"note_id": note_id, "model_name": emb.model_name, "embedding_len": len(__import__("json").loads(emb.embedding_json))}
+
+
+@app.get("/clusters/recompute", response_model=List[ClusterOut])
+def recompute_clusters(k: int = 5, per_cluster: int = 3, book_id: Optional[int] = None):
+    if not (2 <= k <= 20):
+        raise HTTPException(status_code=400, detail="k must be 2..20")
+    if not (1 <= per_cluster <= 10):
+        raise HTTPException(status_code=400, detail="per_cluster must be 1..10")
+
+    with SessionLocal() as db:
+        stmt = (
+            select(Note, NoteEmbedding)
+            .join(NoteEmbedding, NoteEmbedding.note_id == Note.id)
+        )
+        if book_id is not None:
+            stmt = stmt.where(Note.book_id == book_id)
+
+        rows = db.execute(stmt).all()
+        if len(rows) < k:
+            raise HTTPException(status_code=400, detail=f"need at least {k} notes to cluster")
+
+        notes = [note for note, _ in rows]
+        embs = [load_vec(emb.embedding_json) for _, emb in rows]
+        X = np.vstack(embs)
+
+        labels, centers = kmeans_clusters(X, k=k)
+
+        # For each cluster, pick representative notes closest to centroid
+        results: List[ClusterOut] = []
+        for cid in range(k):
+            idxs = np.where(labels == cid)[0]
+            cluster_notes = [notes[i] for i in idxs]
+            cluster_vecs = X[idxs]
+            centroid = centers[cid]
+
+            sims = cluster_vecs @ centroid
+            order = np.argsort(-sims)[:per_cluster]
+
+            reps = []
+            for j in order:
+                note_obj = cluster_notes[j]
+                reps.append(
+                    ClusterNote(
+                        note=NoteOut.model_validate(note_obj),
+                        score=float(sims[j]),
+                    )
+                )
+
+            # Keywords from cluster text
+            kw = top_keywords([n.text for n in cluster_notes], top_n=5)
+
+            results.append(
+                ClusterOut(
+                    cluster_id=cid,
+                    size=len(cluster_notes),
+                    keywords=kw,
+                    representatives=reps,
+                )
+            )
+
+        # Sort clusters by size
+        results.sort(key=lambda c: c.size, reverse=True)
+        return results
