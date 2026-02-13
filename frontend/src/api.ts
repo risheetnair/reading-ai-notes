@@ -48,3 +48,28 @@ export async function createNote(payload: { text: string; book_id?: number | nul
   }
   return res.json();
 }
+
+export type NoteSearchHit = {
+  note: Note;
+  score: number;
+};
+
+export async function searchNotes(params: {
+  q: string;
+  k?: number;
+  book_id?: number | null;
+}): Promise<NoteSearchHit[]> {
+  const q = params.q.trim();
+  const k = params.k ?? 10;
+
+  const url = new URL(`${API}/search/notes`);
+  url.searchParams.set("q", q);
+  url.searchParams.set("k", String(k));
+  if (params.book_id !== undefined && params.book_id !== null) {
+    url.searchParams.set("book_id", String(params.book_id));
+  }
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`GET /search/notes failed (HTTP ${res.status})`);
+  return res.json();
+}

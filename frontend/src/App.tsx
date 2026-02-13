@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Book, Note } from "./api";
-import { createBook, createNote, listBooks, listNotes } from "./api";
+import { createBook, createNote, listBooks, listNotes, searchNotes } from "./api";
 
 
 export default function App() {
@@ -19,6 +19,11 @@ export default function App() {
   const [selectedBookId, setSelectedBookId] = useState<number | "none">("none");
 
   const booksById = useMemo(() => new Map(books.map((b) => [b.id, b])), [books]);
+
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<{ note: Note; score: number }[]>([]);
+  const [searching, setSearching] = useState(false);
+
 
   async function refreshAll() {
     try {
@@ -65,6 +70,30 @@ export default function App() {
       alert(e.message);
     }
   }
+
+  async function onSearch() {
+    const q = query.trim();
+    if (!q) return;
+
+    setSearching(true);
+    try {
+      const bookFilter =
+        selectedBookId === "none" ? null : (selectedBookId as number);
+
+      const results = await searchNotes({
+        q,
+        k: 10,
+        book_id: bookFilter,
+      });
+
+      setHits(results);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSearching(false);
+    }
+  }
+
 
   return (
     <div style={{ maxWidth: 1000, margin: "40px auto", fontFamily: "system-ui" }}>
@@ -145,6 +174,49 @@ export default function App() {
           </div>
 
           <hr style={{ margin: "16px 0" }} />
+
+          <hr style={{ margin: "16px 0" }} />
+
+          <h3>Semantic Search</h3>
+          <p style={{ marginTop: 6, opacity: 0.75 }}>
+            Search by meaning (not keywords). Uses local embeddings.
+          </p>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder='e.g. "slow start but beautiful prose"'
+              style={{ flex: 1, padding: 10 }}
+            />
+            <button onClick={onSearch} disabled={searching}>
+              {searching ? "Searching..." : "Search"}
+            </button>
+          </div>
+
+          {hits.length > 0 ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+                Showing top {hits.length} results
+                {selectedBookId === "none" ? "" : " (filtered to selected book)"}
+              </div>
+              <ul style={{ paddingLeft: 18 }}>
+                {hits.map((h) => {
+                  const book = h.note.book_id ? booksById.get(h.note.book_id) : null;
+                  return (
+                    <li key={`hit-${h.note.id}`} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>
+                        score: {h.score.toFixed(4)}
+                        {book ? ` • ${book.title}` : ""}
+                      </div>
+                      <div>{h.note.text}</div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
 
           <ul>
             {notes.length === 0 ? (
