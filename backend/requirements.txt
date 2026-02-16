@@ -30,6 +30,8 @@ networkx==3.2.1
 numpy==2.0.2
 packaging==26.0
 pillow==11.3.0
+psycopg==3.2.13
+psycopg-binary==3.2.13
 pydantic==2.12.5
 pydantic-extra-types==2.11.0
 pydantic-settings==2.11.0
