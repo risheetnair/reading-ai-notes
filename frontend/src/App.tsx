@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Book, Note } from "./api";
-import { createBook, createNote, listBooks, listNotes, searchNotes } from "./api";
+import { createBook, createNote, listBooks, listNotes, searchNotes, recomputeClusters } from "./api";
 
 
 export default function App() {
@@ -23,6 +23,12 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<{ note: Note; score: number }[]>([]);
   const [searching, setSearching] = useState(false);
+
+  const [clusters, setClusters] = useState<any[]>([]);
+  const [k, setK] = useState(3);
+  const [perCluster, setPerCluster] = useState(2);
+  const [clustering, setClustering] = useState(false);
+
 
 
   async function refreshAll() {
@@ -93,6 +99,27 @@ export default function App() {
       setSearching(false);
     }
   }
+
+  async function onRecomputeClusters() {
+    setClustering(true);
+    try {
+      const bookFilter =
+        selectedBookId === "none" ? null : (selectedBookId as number);
+
+      const data = await recomputeClusters({
+        k,
+        per_cluster: perCluster,
+        book_id: bookFilter,
+      });
+
+      setClusters(data);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setClustering(false);
+    }
+  }
+
 
 
   return (
@@ -216,6 +243,92 @@ export default function App() {
               </ul>
             </div>
           ) : null}
+          
+          <hr style={{ margin: "16px 0" }} />
+
+          <h3>Themes (Clustering)</h3>
+          <p style={{ marginTop: 6, opacity: 0.75 }}>
+            Groups your notes into themes using embeddings + KMeans.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <label style={{ fontSize: 12, opacity: 0.8 }}>
+              k:&nbsp;
+              <input
+                type="number"
+                value={k}
+                min={2}
+                max={20}
+                onChange={(e) => setK(Number(e.target.value))}
+                style={{ width: 70, padding: 6 }}
+              />
+            </label>
+
+            <label style={{ fontSize: 12, opacity: 0.8 }}>
+              reps/cluster:&nbsp;
+              <input
+                type="number"
+                value={perCluster}
+                min={1}
+                max={10}
+                onChange={(e) => setPerCluster(Number(e.target.value))}
+                style={{ width: 110, padding: 6 }}
+              />
+            </label>
+
+            <button onClick={onRecomputeClusters} disabled={clustering}>
+              {clustering ? "Clustering..." : "Recompute themes"}
+            </button>
+
+            <span style={{ fontSize: 12, opacity: 0.7 }}>
+              {selectedBookId === "none" ? "Across all books" : "Filtered to selected book"}
+            </span>
+          </div>
+
+          {clusters.length > 0 ? (
+            <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+              {clusters.map((c: any) => (
+                <div
+                  key={`cluster-${c.cluster_id}`}
+                  style={{ border: "1px solid #e0e0e0", borderRadius: 12, padding: 12 }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <strong>Theme #{c.cluster_id}</strong>
+                    <span style={{ fontSize: 12, opacity: 0.7 }}>{c.size} notes</span>
+                  </div>
+
+                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
+                    <strong>Keywords:</strong> {Array.isArray(c.keywords) ? c.keywords.join(", ") : ""}
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <strong style={{ fontSize: 12, opacity: 0.9 }}>Representative notes</strong>
+                    <ul style={{ paddingLeft: 18, marginTop: 6 }}>
+                      {c.representatives?.map((r: any) => {
+                        const book = r.note.book_id ? booksById.get(r.note.book_id) : null;
+                        return (
+                          <li key={`rep-${c.cluster_id}-${r.note.id}`} style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 12, opacity: 0.7 }}>
+                              score: {Number(r.score).toFixed(4)}
+                              {book ? ` • ${book.title}` : ""}
+                            </div>
+                            <div>{r.note.text}</div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+
+
+
+
+
+
 
 
           <ul>

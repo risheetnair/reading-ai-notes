@@ -73,3 +73,35 @@ export async function searchNotes(params: {
   if (!res.ok) throw new Error(`GET /search/notes failed (HTTP ${res.status})`);
   return res.json();
 }
+
+export type ClusterNote = {
+  note: Note;
+  score: number;
+};
+
+export type ClusterOut = {
+  cluster_id: number;
+  size: number;
+  keywords: string[];
+  representatives: ClusterNote[];
+};
+
+export async function recomputeClusters(params: {
+  k?: number;
+  per_cluster?: number;
+  book_id?: number | null;
+}): Promise<ClusterOut[]> {
+  const url = new URL(`${API}/clusters/recompute`);
+  url.searchParams.set("k", String(params.k ?? 3));
+  url.searchParams.set("per_cluster", String(params.per_cluster ?? 2));
+  if (params.book_id !== undefined && params.book_id !== null) {
+    url.searchParams.set("book_id", String(params.book_id));
+  }
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(msg || `GET /clusters/recompute failed (HTTP ${res.status})`);
+  }
+  return res.json();
+}
