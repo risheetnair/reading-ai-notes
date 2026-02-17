@@ -28,7 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 class NoteCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=10_000)

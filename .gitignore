@@ -215,3 +215,5 @@ backend/app.db
 
 backend/.venv/
 
+*.env
+*.env.*
