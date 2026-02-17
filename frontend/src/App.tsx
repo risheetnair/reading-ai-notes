@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Book, Note } from "./api";
 import { createBook, createNote, listBooks, listNotes, searchNotes, recomputeClusters } from "./api";
+import { supabase } from "./supabaseClient";
 
 
 export default function App() {
@@ -29,6 +30,8 @@ export default function App() {
   const [perCluster, setPerCluster] = useState(2);
   const [clustering, setClustering] = useState(false);
 
+  const [user, setUser] = useState<any>(null);
+
 
 
   async function refreshAll() {
@@ -45,6 +48,21 @@ export default function App() {
   useEffect(() => {
     refreshAll();
   }, []);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ?? null);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
 
   async function onCreateBook() {
     const title = bookTitle.trim();
@@ -124,8 +142,42 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 1000, margin: "40px auto", fontFamily: "system-ui" }}>
-      <h1>Reading AI Notes</h1>
-      <p>Status: {status}</p>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 12,
+        }}
+      >
+        <div>
+          <h1 style={{ margin: 0 }}>Reading AI Notes</h1>
+          <p style={{ marginTop: 8 }}>Status: {status}</p>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {user ? (
+            <>
+              <span style={{ fontSize: 12, opacity: 0.75 }}>{user.email}</span>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                }}
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={async () => {
+                await supabase.auth.signInWithOAuth({ provider: "google" });
+              }}
+            >
+              Sign in with Google
+            </button>
+          )}
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         {/* Books */}
@@ -243,7 +295,7 @@ export default function App() {
               </ul>
             </div>
           ) : null}
-          
+
           <hr style={{ margin: "16px 0" }} />
 
           <h3>Themes (Clustering)</h3>
@@ -323,14 +375,6 @@ export default function App() {
             </div>
           ) : null}
 
-
-
-
-
-
-
-
-
           <ul>
             {notes.length === 0 ? (
               <li>No notes yet.</li>
@@ -353,4 +397,5 @@ export default function App() {
       </div>
     </div>
   );
+
 }
