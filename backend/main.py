@@ -15,6 +15,9 @@ from clusters import load_vec, kmeans_clusters, top_keywords
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi import Depends
+from auth import get_current_user_id
+
 
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
@@ -72,7 +75,7 @@ class ClusterOut(BaseModel):
 
 
 @app.post("/notes", response_model=NoteOut, status_code=201)
-def create_note(payload: NoteCreate):
+def create_note(payload: NoteCreate, user_id: str = Depends(get_current_user_id)):
     with SessionLocal() as db:
         if payload.book_id is not None:
             exists = db.get(Book, payload.book_id)
@@ -92,7 +95,7 @@ def create_note(payload: NoteCreate):
         return note
 
 @app.get("/notes", response_model=List[NoteOut])
-def list_notes(limit: int = 50, offset: int = 0, book_id: Optional[int] = None):
+def list_notes(limit: int = 50, offset: int = 0, book_id: Optional[int] = None, user_id: str = Depends(get_current_user_id)):
     if not (1 <= limit <= 200):
         raise HTTPException(status_code=400, detail="limit must be 1..200")
     if offset < 0:
@@ -107,7 +110,7 @@ def list_notes(limit: int = 50, offset: int = 0, book_id: Optional[int] = None):
         return list(db.scalars(stmt).all())
     
 @app.post("/books", response_model=BookOut, status_code=201)
-def create_book(payload: BookCreate):
+def create_book(payload: BookCreate, user_id: str = Depends(get_current_user_id)):
     with SessionLocal() as db:
         book = Book(title=payload.title, author=payload.author)
         db.add(book)
@@ -116,7 +119,7 @@ def create_book(payload: BookCreate):
         return book
 
 @app.get("/books", response_model=List[BookOut])
-def list_books(limit: int = 50, offset: int = 0):
+def list_books(limit: int = 50, offset: int = 0, user_id: str = Depends(get_current_user_id)):
     if not (1 <= limit <= 200):
         raise HTTPException(status_code=400, detail="limit must be 1..200")
     if offset < 0:
@@ -127,7 +130,7 @@ def list_books(limit: int = 50, offset: int = 0):
         return list(db.scalars(stmt).all())
     
 @app.get("/search/notes", response_model=List[NoteSearchHit])
-def search_notes(q: str, k: int = 10, book_id: Optional[int] = None):
+def search_notes(q: str, k: int = 10, book_id: Optional[int] = None, user_id: str = Depends(get_current_user_id)):
     if not q.strip():
         raise HTTPException(status_code=400, detail="q must not be empty")
     if not (1 <= k <= 50):
@@ -175,7 +178,7 @@ def get_embedding(note_id: int):
 
 
 @app.get("/clusters/recompute", response_model=List[ClusterOut])
-def recompute_clusters(k: int = 5, per_cluster: int = 3, book_id: Optional[int] = None):
+def recompute_clusters(k: int = 5, per_cluster: int = 3, book_id: Optional[int] = None, user_id: str = Depends(get_current_user_id)):
     if not (2 <= k <= 20):
         raise HTTPException(status_code=400, detail="k must be 2..20")
     if not (1 <= per_cluster <= 10):

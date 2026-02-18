@@ -58,6 +58,10 @@ export default function App() {
       setUser(session?.user ?? null);
     });
 
+    supabase.auth.getSession().then(({ data }) => {
+      console.log("ACCESS TOKEN:", data.session?.access_token);
+    });
+
     return () => {
       listener.subscription.unsubscribe();
     };
