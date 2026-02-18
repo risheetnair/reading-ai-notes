@@ -82,7 +82,7 @@ def create_note(payload: NoteCreate, user_id: str = Depends(get_current_user_id)
             if exists is None:
                 raise HTTPException(status_code=400, detail="book_id does not exist")
             
-        note = Note(text=payload.text, book_id=payload.book_id)
+        note = Note(user_id=user_id, text=payload.text, book_id=payload.book_id)
         db.add(note)
         db.commit()
         db.refresh(note)
@@ -102,7 +102,7 @@ def list_notes(limit: int = 50, offset: int = 0, book_id: Optional[int] = None, 
         raise HTTPException(status_code=400, detail="offset must be >= 0")
 
     with SessionLocal() as db:
-        stmt = select(Note)
+        stmt = select(Note).where(Note.user_id == user_id)
         if book_id is not None:
             stmt = stmt.where(Note.book_id == book_id)
 
@@ -112,7 +112,7 @@ def list_notes(limit: int = 50, offset: int = 0, book_id: Optional[int] = None, 
 @app.post("/books", response_model=BookOut, status_code=201)
 def create_book(payload: BookCreate, user_id: str = Depends(get_current_user_id)):
     with SessionLocal() as db:
-        book = Book(title=payload.title, author=payload.author)
+        book = Book(user_id=user_id, title=payload.title, author=payload.author)
         db.add(book)
         db.commit()
         db.refresh(book)
@@ -126,7 +126,7 @@ def list_books(limit: int = 50, offset: int = 0, user_id: str = Depends(get_curr
         raise HTTPException(status_code=400, detail="offset must be >= 0")
 
     with SessionLocal() as db:
-        stmt = select(Book).order_by(Book.created_at.desc()).limit(limit).offset(offset)
+        stmt = select(Book).where(Book.user_id == user_id).order_by(Book.created_at.desc()).limit(limit).offset(offset)
         return list(db.scalars(stmt).all())
     
 @app.get("/search/notes", response_model=List[NoteSearchHit])
@@ -145,6 +145,7 @@ def search_notes(q: str, k: int = 10, book_id: Optional[int] = None, user_id: st
             select(Note, NoteEmbedding)
             .join(NoteEmbedding, NoteEmbedding.note_id == Note.id)
             .where(NoteEmbedding.model_name == model_name)
+            .where(Note.user_id == user_id)
         )
         if book_id is not None:
             stmt = stmt.where(Note.book_id == book_id)
@@ -184,10 +185,14 @@ def recompute_clusters(k: int = 5, per_cluster: int = 3, book_id: Optional[int] 
     if not (1 <= per_cluster <= 10):
         raise HTTPException(status_code=400, detail="per_cluster must be 1..10")
 
+    model_name, _ = embed_text("model_probe")
+
     with SessionLocal() as db:
         stmt = (
             select(Note, NoteEmbedding)
             .join(NoteEmbedding, NoteEmbedding.note_id == Note.id)
+            .where(Note.user_id == user_id)
+            .where(NoteEmbedding.model_name == model_name)
         )
         if book_id is not None:
             stmt = stmt.where(Note.book_id == book_id)
