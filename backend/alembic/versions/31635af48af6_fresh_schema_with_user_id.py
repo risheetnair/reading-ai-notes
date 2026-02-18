@@ -1,8 +1,8 @@
-"""initial schema
+"""fresh schema with user_id
 
-Revision ID: 8b0c2c3d91a7
+Revision ID: 31635af48af6
 Revises: 
-Create Date: 2026-02-17 11:36:38.134326
+Create Date: 2026-02-18 18:08:23.621867
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '8b0c2c3d91a7'
+revision: str = '31635af48af6'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,21 +26,25 @@ def upgrade() -> None:
     sa.Column('title', sa.String(length=255), nullable=False),
     sa.Column('author', sa.String(length=255), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('user_id', sa.String(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_books_author'), 'books', ['author'], unique=False)
     op.create_index(op.f('ix_books_id'), 'books', ['id'], unique=False)
     op.create_index(op.f('ix_books_title'), 'books', ['title'], unique=False)
+    op.create_index(op.f('ix_books_user_id'), 'books', ['user_id'], unique=False)
     op.create_table('notes',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('text', sa.Text(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('book_id', sa.Integer(), nullable=True),
+    sa.Column('user_id', sa.String(), nullable=False),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_notes_book_id'), 'notes', ['book_id'], unique=False)
     op.create_index(op.f('ix_notes_id'), 'notes', ['id'], unique=False)
+    op.create_index(op.f('ix_notes_user_id'), 'notes', ['user_id'], unique=False)
     op.create_table('note_embeddings',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('note_id', sa.Integer(), nullable=False),
@@ -61,9 +65,11 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_note_embeddings_note_id'), table_name='note_embeddings')
     op.drop_index(op.f('ix_note_embeddings_id'), table_name='note_embeddings')
     op.drop_table('note_embeddings')
+    op.drop_index(op.f('ix_notes_user_id'), table_name='notes')
     op.drop_index(op.f('ix_notes_id'), table_name='notes')
     op.drop_index(op.f('ix_notes_book_id'), table_name='notes')
     op.drop_table('notes')
+    op.drop_index(op.f('ix_books_user_id'), table_name='books')
     op.drop_index(op.f('ix_books_title'), table_name='books')
     op.drop_index(op.f('ix_books_id'), table_name='books')
     op.drop_index(op.f('ix_books_author'), table_name='books')

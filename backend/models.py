@@ -3,6 +3,8 @@ from sqlalchemy import Column, DateTime, Integer, Text, String, ForeignKey, Floa
 # from sqlalchemy import Text as SqlText
 from sqlalchemy.orm import relationship
 from db import Base
+from sqlalchemy import String
+
 
 class Note(Base):
     __tablename__ = "notes"
@@ -12,6 +14,7 @@ class Note(Base):
     book_id = Column(Integer, ForeignKey("books.id"), nullable=True, index=True)
     book = relationship("Book", back_populates="notes")
     embedding = relationship("NoteEmbedding", back_populates="note", uselist=False, cascade="all, delete-orphan")
+    user_id = Column(String, index=True, nullable=False)
 
 
 class Book(Base):
@@ -23,6 +26,7 @@ class Book(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now
     (timezone.utc), nullable=False)
     notes = relationship("Note", back_populates="book", cascade="all, delete-orphan")
+    user_id = Column(String, index=True, nullable=False)
 
 
 class NoteEmbedding(Base):
