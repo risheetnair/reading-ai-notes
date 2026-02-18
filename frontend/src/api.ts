@@ -1,4 +1,13 @@
-const API = "http://127.0.0.1:8000";
+import { supabase } from "./supabaseClient";
+
+const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 
 export type Book = {
   id: number;
@@ -15,31 +24,48 @@ export type Note = {
 };
 
 export async function listBooks(): Promise<Book[]> {
-  const res = await fetch(`${API}/books?limit=200&offset=0`);
+  const res = await fetch(`${API}/books?limit=200&offset=0`, {
+    headers: await authHeaders(),
+  });
   if (!res.ok) throw new Error(`GET /books failed (HTTP ${res.status})`);
   return res.json();
 }
 
 export async function createBook(payload: { title: string; author?: string | null }): Promise<Book> {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(await authHeaders()),
+  };
+
   const res = await fetch(`${API}/books`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`POST /books failed (HTTP ${res.status})`);
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(msg || `POST /books failed (HTTP ${res.status})`);
+  }
   return res.json();
 }
 
 export async function listNotes(): Promise<Note[]> {
-  const res = await fetch(`${API}/notes?limit=20&offset=0`);
+  const res = await fetch(`${API}/notes?limit=20&offset=0`, {
+    headers: await authHeaders(),
+  });
   if (!res.ok) throw new Error(`GET /notes failed (HTTP ${res.status})`);
   return res.json();
 }
 
 export async function createNote(payload: { text: string; book_id?: number | null }): Promise<Note> {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(await authHeaders()),
+  };
+
   const res = await fetch(`${API}/notes`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -69,8 +95,14 @@ export async function searchNotes(params: {
     url.searchParams.set("book_id", String(params.book_id));
   }
 
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`GET /search/notes failed (HTTP ${res.status})`);
+  const res = await fetch(url.toString(), {
+    headers: await authHeaders(),
+  });
+
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(msg || `GET /search/notes failed (HTTP ${res.status})`);
+  }
   return res.json();
 }
 
@@ -98,7 +130,10 @@ export async function recomputeClusters(params: {
     url.searchParams.set("book_id", String(params.book_id));
   }
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), {
+    headers: await authHeaders(),
+  });
+  
   if (!res.ok) {
     const msg = await res.text();
     throw new Error(msg || `GET /clusters/recompute failed (HTTP ${res.status})`);
