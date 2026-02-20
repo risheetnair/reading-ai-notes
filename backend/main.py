@@ -73,6 +73,9 @@ class ClusterOut(BaseModel):
     keywords: List[str]
     representatives: List[ClusterNote]
 
+@app.get("/")
+def health():
+    return {"status": "ok", "service": "reading-ai-notes-backend"}
 
 @app.post("/notes", response_model=NoteOut, status_code=201)
 def create_note(payload: NoteCreate, user_id: str = Depends(get_current_user_id)):
