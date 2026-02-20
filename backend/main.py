@@ -74,6 +74,15 @@ class ClusterOut(BaseModel):
     keywords: List[str]
     representatives: List[ClusterNote]
 
+from fastapi import Request
+
+@app.get("/echo-origin")
+def echo_origin(request: Request):
+    return {
+        "origin": request.headers.get("origin"),
+        "cors_origins": cors_origins,
+    }
+
 @app.get("/")
 def health():
     return {"status": "ok", "service": "reading-ai-notes-backend"}
