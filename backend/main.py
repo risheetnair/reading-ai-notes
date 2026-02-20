@@ -23,6 +23,7 @@ import os
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+print("CORS_ORIGINS =", cors_origins)
 
 app.add_middleware(
     CORSMiddleware,
