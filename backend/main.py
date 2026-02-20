@@ -17,16 +17,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import Depends
 from auth import get_current_user_id
+import os
 
 
 
 app = FastAPI(title="Reading AI Notes API", version="0.1.0")
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=[o.strip() for o in cors_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
